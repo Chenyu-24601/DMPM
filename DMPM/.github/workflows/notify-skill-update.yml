@@ -1,0 +1,101 @@
+name: Notify DMPM Skill Updates
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'DMPM/skills/**'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - name: Get changed skills
+        id: changes
+        run: |
+          # 获取变更的文件
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "DMPM/skills/" || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No skill changes"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+          # 提取变更的 Skill 名称
+          SKILLS=$(echo "$CHANGED_FILES" | cut -d'/' -f3 | sort -u | tr '\n' ', ' | sed 's/,$//')
+          echo "skills=$SKILLS" >> $GITHUB_OUTPUT
+
+          # 获取提交信息
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "commit_msg<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # 获取提交者
+          AUTHOR=$(git log -1 --pretty=%an)
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+
+      - name: Display changes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          echo "Changed Skills: ${{ steps.changes.outputs.skills }}"
+          echo "Author: ${{ steps.changes.outputs.author }}"
+          echo "Commit Message:"
+          echo "${{ steps.changes.outputs.commit_msg }}"
+
+      # 可选：发送到飞书
+      # - name: Send to Feishu
+      #   if: steps.changes.outputs.has_changes == 'true'
+      #   run: |
+      #     curl -X POST ${{ secrets.FEISHU_WEBHOOK_URL }} \
+      #       -H 'Content-Type: application/json' \
+      #       -d '{
+      #         "msg_type": "text",
+      #         "content": {
+      #           "text": "🎉 DMPM Skills 更新\n\n更新者: ${{ steps.changes.outputs.author }}\n变更的 Skills: ${{ steps.changes.outputs.skills }}\n\n记得运行以下命令获取最新版本：\ngit pull\n./DMPM/scripts/sync-from-team.sh"
+      #         }
+      #       }'
+
+      # 可选：发送到企业微信
+      # - name: Send to WeCom
+      #   if: steps.changes.outputs.has_changes == 'true'
+      #   run: |
+      #     curl -X POST ${{ secrets.WECOM_WEBHOOK_URL }} \
+      #       -H 'Content-Type: application/json' \
+      #       -d '{
+      #         "msgtype": "markdown",
+      #         "markdown": {
+      #           "content": "## 🎉 DMPM Skills 更新\n\n**更新者**: ${{ steps.changes.outputs.author }}\n**变更的 Skills**: ${{ steps.changes.outputs.skills }}\n\n请运行以下命令获取最新版本：\n```bash\ngit pull\n./DMPM/scripts/sync-from-team.sh\n```"
+      #         }
+      #       }'
+
+      # 可选：创建 GitHub Release
+      # - name: Create Release
+      #   if: steps.changes.outputs.has_changes == 'true' && contains(github.event.head_commit.message, 'release')
+      #   uses: actions/create-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     tag_name: dmpm-${{ github.run_number }}
+      #     release_name: DMPM Skills Update ${{ github.run_number }}
+      #     body: |
+      #       ## Skills 更新
+      #
+      #       **更新者**: ${{ steps.changes.outputs.author }}
+      #       **变更的 Skills**: ${{ steps.changes.outputs.skills }}
+      #
+      #       ### 提交信息
+      #       ${{ steps.changes.outputs.commit_msg }}
+      #     draft: false
+      #     prerelease: false
