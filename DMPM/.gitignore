@@ -77,3 +77,13 @@ htmlcov/
 .local/
 temp/
 scratch/
+
+# Sensitive files - DO NOT COMMIT TOKENS OR CREDENTIALS
+*.token
+*.key
+.env
+.env.local
+*_credentials.sh
+.git-credentials
+secrets/
+.secrets/
